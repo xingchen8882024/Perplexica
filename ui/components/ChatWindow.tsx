@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useSearchParams } from 'next/navigation';
 import { getSuggestions } from '@/lib/actions';
 import Error from 'next/error';
+import { getServerEnv } from '@/lib/serverEnvironment';
 
 export type Message = {
   messageId: string;
@@ -22,13 +23,16 @@ export type Message = {
 };
 
 const useSocket = (
-  url: string,
+  url: string | null,
   setIsWSReady: (ready: boolean) => void,
   setError: (error: boolean) => void,
 ) => {
   const [ws, setWs] = useState<WebSocket | null>(null);
 
   useEffect(() => {
+    if (!url) {
+      return;
+    }
     if (!ws) {
       const connectWs = async () => {
         let chatModel = localStorage.getItem('chatModel');
@@ -39,7 +43,7 @@ const useSocket = (
         );
 
         const providers = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/models`,
+          `${await getServerEnv("BACKEND_API_URL")}/models`,
           {
             headers: {
               'Content-Type': 'application/json',
@@ -215,7 +219,7 @@ const loadMessages = async (
   setNotFound: (notFound: boolean) => void,
 ) => {
   const res = await fetch(
-    `${process.env.NEXT_PUBLIC_API_URL}/chats/${chatId}`,
+    `${await getServerEnv("BACKEND_API_URL")}/chats/${chatId}`,
     {
       method: 'GET',
       headers: {
@@ -255,6 +259,8 @@ const loadMessages = async (
 };
 
 const ChatWindow = ({ id }: { id?: string }) => {
+  const [wsServerUrl, setWsServerUrl] = useState<string | null>(null);
+
   const searchParams = useSearchParams();
   const initialMessage = searchParams.get('q');
 
@@ -266,7 +272,7 @@ const ChatWindow = ({ id }: { id?: string }) => {
 
   const [isWSReady, setIsWSReady] = useState(false);
   const ws = useSocket(
-    process.env.NEXT_PUBLIC_WS_URL!,
+    wsServerUrl,
     setIsWSReady,
     setHasError,
   );
@@ -326,6 +332,15 @@ const ChatWindow = ({ id }: { id?: string }) => {
       setIsReady(true);
     }
   }, [isMessagesLoaded, isWSReady]);
+
+  useEffect(() => {
+    const fetchWsServerUrl = async () => {
+      const url = await getServerEnv("BACKEND_WS_URL");
+      setWsServerUrl(url);
+    };
+
+    fetchWsServerUrl();
+  }, []);
 
   const sendMessage = async (message: string) => {
     if (loading) return;
